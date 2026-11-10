@@ -1,0 +1,8 @@
+{
+  "request_id": "demo-emergency-001",
+  "customer_name": "Anna Kovalenko",
+  "message": "Water is pouring from a burst pipe and rapidly flooding the kitchen floor. The main shutoff valve is stuck.",
+  "location": "Kyiv",
+  "preferred_contact": "phone",
+  "source": "portfolio_demo"
+}

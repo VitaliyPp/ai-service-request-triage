@@ -1,0 +1,8 @@
+{
+  "request_id": "demo-routine-001",
+  "customer_name": "Mark Evans",
+  "message": "The dishwasher completes its cycle but leaves a small amount of water at the bottom. There is no leak.",
+  "location": "Lviv",
+  "preferred_contact": "email",
+  "source": "portfolio_demo"
+}

@@ -1,0 +1,8 @@
+{
+  "request_id": "demo-invalid-001",
+  "customer_name": "",
+  "message": "Too short",
+  "location": "",
+  "preferred_contact": "telegram",
+  "source": "portfolio_demo"
+}

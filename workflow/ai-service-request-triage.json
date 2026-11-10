@@ -1,0 +1,823 @@
+{
+  "name": "AI Service Request Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "model": "nvidia/nemotron-3.5-super-vl:free",
+        "options": {
+          "maxTokens": 2048,
+          "temperature": 0.1,
+          "maxRetries": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        416
+      ],
+      "id": "f8cba15d-cb54-40c9-a57b-c42375d8cf27",
+      "name": "OpenRouter Chat Model"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "service-request-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a2a3cff4-08b8-4b88-9539-4fca2c282614",
+      "name": "Webhook",
+      "webhookId": "c0a9b032-d225-4769-8149-f5481a41b86e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4bd8e3b9-6907-414e-ba32-df54d8856e8c",
+              "name": "request_id",
+              "value": "={{ String($json.body?.request_id ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "9194377a-7c15-4046-8a10-38aada99e566",
+              "name": "customer_name",
+              "value": "={{ String($json.body?.customer_name ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "66b3b1c7-dad8-4810-af81-361f64a64cf1",
+              "name": "message",
+              "value": "={{ String($json.body?.message ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "dd9634eb-c249-4e28-a0a3-2c3d179a74f4",
+              "name": "location",
+              "value": "={{ String($json.body?.location ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "4317ff88-c5ca-469c-8b03-d15f938fbacd",
+              "name": "preferred_contact",
+              "value": "={{ String($json.body?.preferred_contact ?? '').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "3dab2020-3aeb-4f5b-8404-7227591c32a7",
+              "name": "source",
+              "value": "={{ String($json.body?.source ?? 'demo_webhook').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "4794dedf-26f5-465e-92e5-38ad03c12eae",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "bcb1c51e-3a00-458d-bcc2-e97a62c92b5e",
+      "name": "Normalize"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aac0dceb-1aa7-47c1-9f6a-4b74d1b91a81",
+              "name": "validation_errors",
+              "value": "={{ [\n  !$json.request_id\n    ? 'request_id is required'\n    : null,\n\n  !$json.customer_name\n    ? 'customer_name is required'\n    : null,\n\n  !$json.message\n    ? 'message is required'\n    : null,\n\n  $json.message && $json.message.length < 20\n    ? 'message must contain at least 20 characters'\n    : null,\n\n  !$json.location\n    ? 'location is required'\n    : null,\n\n  !$json.preferred_contact\n    ? 'preferred_contact is required'\n    : null,\n\n  $json.preferred_contact &&\n    !['phone', 'email', 'sms'].includes($json.preferred_contact)\n    ? 'preferred_contact must be phone, email, or sms'\n    : null\n].filter(Boolean) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "26de92b8-3e31-4e2f-980e-6431c8b1908c",
+      "name": "Validate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "2d11b253-cd4e-47e4-bec2-452c1a2423c9",
+              "leftValue": "={{ $json.validation_errors.length === 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        0
+      ],
+      "id": "db9fb189-2bac-4863-9578-94a621300b61",
+      "name": "Is Request Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"processed\",\n  record_id: $json.id,\n  request_id: $json.request_id,\n  category: $json.category,\n  urgency: $json.urgency,\n  assigned_team: $json.assigned_team,\n  priority: $json.priority,\n  sla_minutes: $json.sla_minutes,\n  confidence: $json.confidence,\n  needs_human_review: $json.needs_human_review,\n  workflow_status: $json.workflow_status\n} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1088,
+        400
+      ],
+      "id": "4ec807cd-8a64-498a-b363-631572a053a0",
+      "name": "Return Processed Result"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"validation_error\",\n  request_id: $json.request_id || null,\n  errors: $json.validation_errors\n} }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        784,
+        -160
+      ],
+      "id": "0097ba81-f6f6-4439-a8f3-7adec309cf91",
+      "name": "Return Validation Error"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this home-service request.\n\nInput:\n{\n  \"request_id\": \"{{ $('Normalize').item.json.request_id }}\",\n  \"message\": \"{{ $('Normalize').item.json.message }}\",\n  \"location\": \"{{ $('Normalize').item.json.location }}\"\n}\n\nRouting:\nplumbing -> Plumbing Team\nelectrical -> Electrical Team\nheating_hvac -> HVAC Team\nappliance -> Appliance Team\nstructural -> Structural Team\ngeneral or other -> General Support\n\nUse emergency only for immediate danger: uncontrolled flooding, fire, smoke, gas leak, exposed live electricity, or immediate danger to people or property.\n\nDo not invent missing details.\nKeep summary and classification_reason concise.\nReturn only the structured result required by the output parser.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -112,
+        224
+      ],
+      "id": "38e431ea-b833-4cc9-8a19-1fa55a1d8f38",
+      "name": "Classify Request with AI",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"request_id\": {\n      \"type\": \"string\"\n    },\n    \"category\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"plumbing\",\n        \"electrical\",\n        \"heating_hvac\",\n        \"appliance\",\n        \"structural\",\n        \"general\",\n        \"other\"\n      ]\n    },\n    \"urgency\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"low\",\n        \"medium\",\n        \"high\",\n        \"emergency\"\n      ]\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"recommended_team\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Plumbing Team\",\n        \"Electrical Team\",\n        \"HVAC Team\",\n        \"Appliance Team\",\n        \"Structural Team\",\n        \"General Support\"\n      ]\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"minimum\": 0,\n      \"maximum\": 1\n    },\n    \"classification_reason\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"request_id\",\n    \"category\",\n    \"urgency\",\n    \"summary\",\n    \"recommended_team\",\n    \"confidence\",\n    \"classification_reason\"\n  ],\n  \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        416
+      ],
+      "id": "24ab7695-bff1-4ce8-877a-27401dddb227",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "215f9fc5-91fe-4949-93c6-d052b0b85df3",
+              "name": "request_id",
+              "value": "={{ $json.output.request_id }}",
+              "type": "string"
+            },
+            {
+              "id": "127a2dfc-c043-410f-a408-cbc9f5328317",
+              "name": "customer_name",
+              "value": "={{ $('Normalize').item.json.customer_name }}",
+              "type": "string"
+            },
+            {
+              "id": "28a876b0-9a12-406a-8f9e-a721ecc73162",
+              "name": "message",
+              "value": "={{ $('Normalize').item.json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "73d92953-4185-4272-908e-df9f2b1b5bc6",
+              "name": "location",
+              "value": "={{ $('Normalize').item.json.location }}",
+              "type": "string"
+            },
+            {
+              "id": "1daa303f-c3e7-4050-b4ac-9bf4a56eed31",
+              "name": "preferred_contact",
+              "value": "={{ $('Normalize').item.json.preferred_contact }}",
+              "type": "string"
+            },
+            {
+              "id": "c69ef0d4-5c92-434d-8644-4ca765df6510",
+              "name": "category",
+              "value": "={{ $json.output.category }}",
+              "type": "string"
+            },
+            {
+              "id": "7959eb09-9365-4c77-b20b-b733f1c692e3",
+              "name": "urgency",
+              "value": "={{ $json.output.urgency }}",
+              "type": "string"
+            },
+            {
+              "id": "15adb6c2-c82f-4180-8964-c33b9c7bcdfa",
+              "name": "summary",
+              "value": "={{ $json.output.summary }}",
+              "type": "string"
+            },
+            {
+              "id": "14592abb-e852-46c9-9b13-27502c0afd27",
+              "name": "assigned_team",
+              "value": "={{ $json.output.recommended_team }}",
+              "type": "string"
+            },
+            {
+              "id": "f5aed442-5cb4-4a74-98ff-a1f7445e2ae7",
+              "name": "confidence",
+              "value": "={{ $json.output.confidence }}",
+              "type": "number"
+            },
+            {
+              "id": "9ab94510-d2e9-4391-a2ee-95f77d336ed6",
+              "name": "classification_reason",
+              "value": "={{ $json.output.classification_reason }}",
+              "type": "string"
+            },
+            {
+              "id": "03ccef7f-2ab6-43e3-b500-fad556e501d6",
+              "name": "priority",
+              "value": "={{ ({\n  emergency: 'P1',\n  high: 'P2',\n  medium: 'P3',\n  low: 'P4'\n})[$json.output.urgency] ?? 'P3' }}",
+              "type": "string"
+            },
+            {
+              "id": "8ee34e19-a5b1-4e9e-8206-9107e70178f5",
+              "name": "sla_minutes",
+              "value": "={{ ({\n  emergency: 15,\n  high: 60,\n  medium: 240,\n  low: 1440\n})[$json.output.urgency] ?? 240 }}",
+              "type": "number"
+            },
+            {
+              "id": "73b63d93-0617-477b-ab28-59dc75aef165",
+              "name": "needs_human_review",
+              "value": "={{ $json.output.confidence < 0.8 || ['general', 'other'].includes($json.output.category) }}",
+              "type": "boolean"
+            },
+            {
+              "id": "462d6fb5-7dfc-4dd6-b8ec-dc633705a755",
+              "name": "requires_immediate_dispatch",
+              "value": "={{ $json.output.urgency === 'emergency' }}",
+              "type": "boolean"
+            },
+            {
+              "id": "124f718a-54af-48d1-88ba-b940baaa1e3a",
+              "name": "processed_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "6102ca35-8a66-44c8-ad73-d068fc212980",
+              "name": "source",
+              "value": "={{ $('Normalize').item.json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "b0f2bbfa-0a5d-4929-8c91-2da72b994ef6",
+              "name": "received_at",
+              "value": "={{ $('Normalize').item.json.received_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        288,
+        208
+      ],
+      "id": "7114b07b-7a7f-4454-b6e0-f1987b23b213",
+      "name": "Apply Business Rules"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.needs_human_review }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "9204761d-4864-4cf4-9dd0-02150e55617e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Human Review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "fe5e3421-0511-4955-843e-245cd14534a4",
+                    "leftValue": "={{ $json.requires_immediate_dispatch }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Emergency Dispatch"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        384
+      ],
+      "id": "5501066a-ebed-4eda-87ab-0a13bcf44a92",
+      "name": "Route Triage Result"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5794723e-e621-4c10-aeff-ceeeb9049172",
+              "name": "workflow_status",
+              "value": "pending_human_review",
+              "type": "string"
+            },
+            {
+              "id": "6344a693-6070-452a-a1e4-cd509a6d92ee",
+              "name": "decision_mode",
+              "value": "human_assisted",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        224
+      ],
+      "id": "eada2dd0-d780-4d47-ad0b-0982aa72b8ff",
+      "name": "Mark for Human Review"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "99b23456-7bbe-4285-b1a3-1aa2652fed7c",
+              "name": "workflow_status",
+              "value": "emergency_dispatch",
+              "type": "string"
+            },
+            {
+              "id": "332b93c3-39de-4980-9c0d-3aec93985981",
+              "name": "decision_mode",
+              "value": "automated_with_escalation",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        400
+      ],
+      "id": "7b4d3076-85d7-42ba-b381-c0be74a06d09",
+      "name": "Mark as Emergency"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e8240d97-151e-47a8-9843-59db5dfe95c7",
+              "name": "workflow_status",
+              "value": "auto_routed",
+              "type": "string"
+            },
+            {
+              "id": "2b80209a-d560-4fcb-951f-b3548642e823",
+              "name": "decision_mode",
+              "value": "automated",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        576
+      ],
+      "id": "9ae83d1e-4b41-4c95-b35f-77ee35e2cbef",
+      "name": "Mark as Auto Routed"
+    },
+    {
+      "parameters": {
+        "tableId": "service_triage_requests",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        400
+      ],
+      "id": "496a3903-6ade-47df-ab60-3deddccb7f69",
+      "name": "Save Triage Result"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "service_triage_requests",
+        "limit": 1,
+        "orderBy": "=",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -16
+      ],
+      "id": "f11b574d-2804-41c3-8be8-8e5bfb9f9ab1",
+      "name": "Find Existing Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "14db7a00-b211-4d72-a0a9-0dbb655ab563",
+              "leftValue": "={{ Boolean($json.id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        -16
+      ],
+      "id": "c9baa4cc-b27e-42a3-a036-62cfd85dbb4d",
+      "name": "Request Already Exists?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"already_processed\",\n  duplicate: true,\n  record_id: $json.id,\n  request_id: $json.request_id,\n  category: $json.category,\n  urgency: $json.urgency,\n  assigned_team: $json.assigned_team,\n  priority: $json.priority,\n  confidence: $json.confidence,\n  workflow_status: $json.workflow_status\n} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1232,
+        -160
+      ],
+      "id": "9b4cbf2c-cc73-4d8a-9a59-d3f36fff90eb",
+      "name": "Return Existing Result"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  status: \"processing_failed\",\n  code: \"ai_service_unavailable\",\n  request_id: $('Normalize').item.json.request_id,\n  message: \"The request was validated but could not be classified automatically.\",\n  needs_human_review: true\n} }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        128,
+        400
+      ],
+      "id": "8e41c15c-3f2c-4652-ab80-e44b24af70f9",
+      "name": "Return AI Service Error"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Is Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Find Existing Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Request with AI": {
+      "main": [
+        [
+          {
+            "node": "Apply Business Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return AI Service Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify Request with AI",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Business Rules": {
+      "main": [
+        [
+          {
+            "node": "Route Triage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Triage Result": {
+      "main": [
+        [
+          {
+            "node": "Mark for Human Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark as Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark as Auto Routed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark for Human Review": {
+      "main": [
+        [
+          {
+            "node": "Save Triage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Emergency": {
+      "main": [
+        [
+          {
+            "node": "Save Triage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Auto Routed": {
+      "main": [
+        [
+          {
+            "node": "Save Triage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Triage Result": {
+      "main": [
+        [
+          {
+            "node": "Return Processed Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Already Exists?": {
+      "main": [
+        [
+          {
+            "node": "Return Existing Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Request with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Request with AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing Request": {
+      "main": [
+        [
+          {
+            "node": "Request Already Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
